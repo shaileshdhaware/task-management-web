@@ -28,6 +28,10 @@ function Dashboard() {
         role: localStorage.getItem('role') as AuthState['role']
     });
 
+    useEffect(() => {
+        setAuth({ token: localStorage.getItem('token'), role: localStorage.getItem('role') as AuthState['role'] });
+    }, [localStorage.getItem('token')]);
+
     const onDelete = (id: number) => {
         setConfirmDialogShow(true);
         setDeleteTaskId(id);

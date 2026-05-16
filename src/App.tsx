@@ -15,6 +15,7 @@ import { LoginForm } from './Components/LoginForm';
 import { AuthState } from './Components/types';
 
 function App() {
+  //eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [auth, setAuth] = useState<AuthState>({
     token: localStorage.getItem('token'),
     role: null
