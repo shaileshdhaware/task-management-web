@@ -1,255 +1,250 @@
-import React from 'react';
-import { render, screen, within, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import Dashboard from './Dashboard';
+import React from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
 
-import { useNavigate } from 'react-router-dom';
+import Dashboard from "./Dashboard";
+import { useTasksStore } from "../Store";
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: jest.fn(),
+// --- Mock react-router-dom navigate so we don't need Router context
+const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useNavigate: () => mockNavigate,
 }));
 
-const mockNavigate = useNavigate as jest.Mock;
-const mockUseTasksStore = jest.fn();
+// --- Mock ActionButtons to provide simple buttons that call handlers
+jest.mock("../Common/ActionButtons", () => {
+  return function ActionButtonsMock(props: any) {
+    const { id, onDelete, onEdit, onView } = props;
+    return (
+      <div>
+        <button type="button" onClick={() => onView?.()} aria-label={`view-${id}`}>
+          View
+        </button>
+        <button type="button" onClick={() => onEdit?.()} aria-label={`edit-${id}`}>
+          Edit
+        </button>
+        <button type="button" onClick={() => onDelete?.(id)} aria-label={`delete-${id}`}>
+          Delete
+        </button>
+      </div>
+    );
+  };
+});
 
-jest.mock('../Store', () => ({
-  useTasksStore: () => mockUseTasksStore(),
+// --- Mock modals so tests don't depend on portals/bootstrap internals
+jest.mock("../Modal/ViewTaskModal", () => {
+  return function ViewTaskModalMock(props: any) {
+    const { show, task, handleClose } = props;
+    if (!show) return null;
+    return (
+      <div role="dialog" aria-label="view-task-modal">
+        <div>Viewing: {task?.title ?? "no-task"}</div>
+        <button type="button" onClick={handleClose}>
+          Close View
+        </button>
+      </div>
+    );
+  };
+});
+
+jest.mock("../Modal/ConfirmationModal", () => {
+  return function ConfirmationModalMock(props: any) {
+    const { show, onConfirm, onCancel } = props;
+    if (!show) return null;
+    return (
+      <div role="dialog" aria-label="confirm-delete-modal">
+        <div>Confirm Delete</div>
+        <button type="button" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    );
+  };
+});
+
+jest.mock("../Modal/ErrorModal", () => {
+  return function ErrorModalMock(props: any) {
+    const { show, errorMessage, onClose } = props;
+    if (!show) return null;
+    return (
+      <div role="dialog" aria-label="error-modal">
+        <div>{errorMessage}</div>
+        <button type="button" onClick={onClose}>
+          Close Error
+        </button>
+      </div>
+    );
+  };
+});
+
+// --- Mock the store hook
+jest.mock("../Store", () => ({
+  useTasksStore: jest.fn(),
 }));
 
+type MockTask = {
+  id: number;
+  title: string;
+  priority: string;
+  taskStatus: string;
+};
 
-// Mock ActionButtons
-jest.mock('../Common/ActionButtons', () => (props) => {
-  const { id, onDelete, onEdit, onView } = props;
-  return (
-    <div>
-      <button type="button" onClick={onView}>
-        View-{id}
-      </button>
-      <button type="button" onClick={onEdit}>
-        Edit-{id}
-      </button>
-      <button type="button" onClick={() => onDelete(id)}>
-        Delete-{id}
-      </button>
-    </div>
-  );
-});
-
-// Mock ViewTaskModal
-jest.mock('../Modal/ViewTaskModal', () => (props) => {
-  const { show, handleClose, task } = props;
-  if (!show) return null;
-  return (
-    <div role="dialog" aria-label="view-task-modal">
-      <div>Viewing: {task ? task.title : 'No task'}</div>
-      <button type="button" onClick={handleClose}>
-        Close View
-      </button>
-    </div>
-  );
-});
-
-// Mock ConfirmationModal
-jest.mock('../Modal/ConfirmationModal', () => (props) => {
-  const { show, onConfirm, onCancel } = props;
-  if (!show) return null;
-  return (
-    <div role="dialog" aria-label="confirmation-modal">
-      <div>Are you sure?</div>
-      <button type="button" onClick={onConfirm}>
-        Confirm
-      </button>
-      <button type="button" onClick={onCancel}>
-        Cancel
-      </button>
-    </div>
-  );
-});
-
-// Mock ErrorModal
-jest.mock('../Modal/ErrorModal', () => (props) => {
-  const { show, errorMessage, onClose } = props;
-  if (!show) return null;
-  return (
-    <div role="dialog" aria-label="error-modal">
-      <div>Error: {errorMessage}</div>
-      <button type="button" onClick={onClose}>
-        Close Error
-      </button>
-    </div>
-  );
-});
-
-describe('Dashboard', () => {
-  let fetchTasksMock;
-  let deleteTaskMock;
-  let resetStoreErrorMock;
-
-  // Mutable "store state" so tests can rerender with different values
-  let storeState;
+describe("<Dashboard />", () => {
+  const fetchTasks = jest.fn();
+  const deleteTask = jest.fn().mockResolvedValue(undefined);
+  const resetStoreError = jest.fn();
 
   beforeEach(() => {
-    
-    mockNavigate.mockClear();
-    mockNavigate.mockReturnValue(jest.fn());
+    jest.clearAllMocks();
 
-    fetchTasksMock = jest.fn();
-    deleteTaskMock = jest.fn().mockResolvedValue(undefined);
-    resetStoreErrorMock = jest.fn();
+    // LocalStorage used by auth state
+    localStorage.setItem("token", "test-token");
+    localStorage.setItem("role", "admin");
 
-    storeState = {
+    // default store state
+    (useTasksStore as unknown as jest.Mock).mockReturnValue({
       tasks: [],
       error: null,
-      fetchTasks: fetchTasksMock,
-      deleteTask: deleteTaskMock,
-      resetStoreError: resetStoreErrorMock,
-    };
-
-    mockUseTasksStore.mockImplementation(() => storeState);
-
-    // localStorage used to build auth state
-    localStorage.setItem('token', 'test-token');
-    localStorage.setItem('role', 'Admin');
+      fetchTasks,
+      deleteTask,
+      resetStoreError,
+    });
   });
 
-  afterEach(() => {
-    localStorage.clear();
-  });
-
-  test('renders header and calls fetchTasks on mount; shows empty state when no tasks', () => {
+  it("renders empty state and calls fetchTasks on mount", async () => {
     render(<Dashboard />);
 
-    expect(screen.getByRole('heading', { name: /welcome to task dashboard/i })).toBeInTheDocument();
-    expect(fetchTasksMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Welcome to Task Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("You don’t have any tasks listed.")).toBeInTheDocument();
 
-    expect(screen.getByText(/you don’t have any tasks listed\./i)).toBeInTheDocument();
+    await waitFor(() => expect(fetchTasks).toHaveBeenCalledTimes(1));
   });
 
-  test('renders table when tasks exist', () => {
-    storeState.tasks = [
-      { id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' },
-      { id: 2, title: 'Write tests', priority: 'Low', taskStatus: 'Done' },
+  it("renders tasks, filters by title, and opens view modal when task id is clicked", async () => {
+    const tasks: MockTask[] = [
+      { id: 1, title: "Write tests", priority: "High", taskStatus: "Open" },
+      { id: 2, title: "Fix bugs", priority: "Low", taskStatus: "Done" },
     ];
 
+    (useTasksStore as unknown as jest.Mock).mockReturnValue({
+      tasks,
+      error: null,
+      fetchTasks,
+      deleteTask,
+      resetStoreError,
+    });
+
     render(<Dashboard />);
 
-    // Table headers
-    expect(screen.getByText('#')).toBeInTheDocument();
-    expect(screen.getByText(/title/i)).toBeInTheDocument();
-    expect(screen.getByText(/priority/i)).toBeInTheDocument();
-    expect(screen.getByText(/status/i)).toBeInTheDocument();
+    // Wait for tasks to show up (state sync from store -> localTasks via useEffect)
+    expect(await screen.findByText("Write tests")).toBeInTheDocument();
+    expect(screen.getByText("Fix bugs")).toBeInTheDocument();
 
-    // Rows (verify some cells)
-    expect(screen.getByText('Fix bug')).toBeInTheDocument();
-    expect(screen.getByText('Write tests')).toBeInTheDocument();
+    // Filter: type "write"
+    const input = screen.getByPlaceholderText("Start typing title to search task");
+    fireEvent.change(input, { target: { value: "write" } });
 
-    // Each id is rendered as a clickable button link
-    expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
+    expect(screen.getByText("Write tests")).toBeInTheDocument();
+    expect(screen.queryByText("Fix bugs")).not.toBeInTheDocument();
+
+    // Open view modal by clicking the id button (the id is rendered as a button)
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+
+    expect(await screen.findByRole("dialog", { name: "view-task-modal" })).toBeInTheDocument();
+    expect(screen.getByText("Viewing: Write tests")).toBeInTheDocument();
+
+    // Close view modal
+    fireEvent.click(screen.getByText("Close View"));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "view-task-modal" })).not.toBeInTheDocument()
+    );
   });
 
-  test('filters tasks when typing in the search input', async () => {
-    const user = userEvent.setup();
-
-    storeState.tasks = [
-      { id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' },
-      { id: 2, title: 'Write tests', priority: 'Low', taskStatus: 'Done' },
+  it("navigates to /createtask with task state on Edit", async () => {
+    const tasks: MockTask[] = [
+      { id: 10, title: "Edit me", priority: "Medium", taskStatus: "Open" },
     ];
 
+    (useTasksStore as unknown as jest.Mock).mockReturnValue({
+      tasks,
+      error: null,
+      fetchTasks,
+      deleteTask,
+      resetStoreError,
+    });
+
     render(<Dashboard />);
 
-    const input = screen.getByRole('textbox', { name: '' }); // placeholder-only textbox
-    await user.type(input, 'fix');
+    expect(await screen.findByText("Edit me")).toBeInTheDocument();
 
-    expect(screen.getByText('Fix bug')).toBeInTheDocument();
-    expect(screen.queryByText('Write tests')).not.toBeInTheDocument();
+    // Click mocked ActionButtons edit
+    fireEvent.click(screen.getByRole("button", { name: "edit-10" }));
 
-    // Clearing restores full list
-    await user.clear(input);
-    expect(screen.getByText('Fix bug')).toBeInTheDocument();
-    expect(screen.getByText('Write tests')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith("/createtask", { state: tasks[0] });
   });
 
-  test('opens ViewTaskModal when clicking task id button', async () => {
-    const user = userEvent.setup();
-
-    storeState.tasks = [
-      { id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' },
+  it("shows confirmation modal and calls deleteTask with id + auth on Confirm", async () => {
+    const tasks: MockTask[] = [
+      { id: 7, title: "Delete me", priority: "High", taskStatus: "Open" },
     ];
 
-    render(<Dashboard />);
-
-    await user.click(screen.getByRole('button', { name: '1' }));
-
-    expect(screen.getByRole('dialog', { name: /view-task-modal/i })).toBeInTheDocument();
-    expect(screen.getByText(/viewing: fix bug/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /close view/i }));
-    expect(screen.queryByRole('dialog', { name: /view-task-modal/i })).not.toBeInTheDocument();
-  });
-
-  /*test('navigates to /createtask with task state when clicking Edit in ActionButtons', async () => {
-    const user = userEvent.setup();
-
-    const task = { id: 7, title: 'Refactor', priority: 'Medium', taskStatus: 'Open' };
-    storeState.tasks = [task];
+    (useTasksStore as unknown as jest.Mock).mockReturnValue({
+      tasks,
+      error: null,
+      fetchTasks,
+      deleteTask,
+      resetStoreError,
+    });
 
     render(<Dashboard />);
 
-    await user.click(screen.getByRole('button', { name: 'Edit-7' }));
+    expect(await screen.findByText("Delete me")).toBeInTheDocument();
 
-    expect(mockNavigate).toHaveBeenCalledWith('/createtask', { state: task });
-  });*/
+    // Click delete
+    fireEvent.click(screen.getByRole("button", { name: "delete-7" }));
 
-  test('shows ConfirmationModal on delete; confirming calls deleteTask with id and auth; then closes', async () => {
-    const user = userEvent.setup();
-
-    const task = { id: 3, title: 'Cleanup', priority: 'Low', taskStatus: 'Open' };
-    storeState.tasks = [task];
-
-    render(<Dashboard />);
-
-    // Open confirm dialog
-    await user.click(screen.getByRole('button', { name: 'Delete-3' }));
-    expect(screen.getByRole('dialog', { name: /confirmation-modal/i })).toBeInTheDocument();
+    // Confirm modal visible
+    expect(await screen.findByRole("dialog", { name: "confirm-delete-modal" })).toBeInTheDocument();
 
     // Confirm delete
-    await user.click(screen.getByRole('button', { name: /confirm/i }));
+    fireEvent.click(screen.getByText("Confirm"));
 
-    await waitFor(() => {
-      expect(deleteTaskMock).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(() =>
+      expect(deleteTask).toHaveBeenCalledWith(7, {
+        token: "test-token",
+        role: "admin",
+      })
+    );
 
-    // Called with (id, auth)
-    const [calledId, calledAuth] = deleteTaskMock.mock.calls[0];
-    expect(calledId).toBe(3);
-    expect(calledAuth).toEqual({ token: 'test-token', role: 'Admin' });
-
-    // Modal should close
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: /confirmation-modal/i })).not.toBeInTheDocument();
-    });
+    // Modal closes after confirm
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "confirm-delete-modal" })).not.toBeInTheDocument()
+    );
   });
 
-  test('shows ErrorModal when store error is set; closing resets store error', async () => {
-    const user = userEvent.setup();
-
-    storeState.tasks = [{ id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' }];
-    const { rerender } = render(<Dashboard />);
-
-    // Inject error and rerender to trigger effect
-    storeState.error = { response: { data: { error: 'Backend exploded' } } };
-    rerender(<Dashboard />);
-
-    expect(screen.getByRole('dialog', { name: /error-modal/i })).toBeInTheDocument();
-    expect(screen.getByText(/backend exploded/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /close error/i }));
-    expect(resetStoreErrorMock).toHaveBeenCalledTimes(1);
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: /error-modal/i })).not.toBeInTheDocument();
+  it("shows error modal when store has error and resets error on close", async () => {
+    (useTasksStore as unknown as jest.Mock).mockReturnValue({
+      tasks: [],
+      error: { response: { data: { error: "API failed" } } },
+      fetchTasks,
+      deleteTask,
+      resetStoreError,
     });
+
+    render(<Dashboard />);
+
+    expect(await screen.findByRole("dialog", { name: "error-modal" })).toBeInTheDocument();
+    expect(screen.getByText("API failed")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Close Error"));
+
+    await waitFor(() => expect(resetStoreError).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "error-modal" })).not.toBeInTheDocument()
+    );
   });
 });

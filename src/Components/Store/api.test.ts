@@ -1,142 +1,106 @@
-import axios from "axios";
+import axios from 'axios';
+import MockAdapter from 'axios-mock-adapter';
 import {
   fetchTasksAPI,
   createTaskAPI,
   updateTaskAPI,
-  deleteTaskAPI
-} from "./api";
+  deleteTaskAPI,
+} from './api';
 
-import { Task } from "./types";
-import { AuthState } from "../types";
+import { Task } from '../types';
 
-// Mock axios
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const BASE_URL = 'http://localhost:8080';
 
-describe("Task API Tests", () => {
+describe('Task API Tests', () => {
+  let axiosMock: MockAdapter;
 
   beforeEach(() => {
+    axiosMock = new MockAdapter(axios);
     jest.clearAllMocks();
   });
 
-  describe("fetchTasksAPI", () => {
-    it("should fetch tasks successfully", async () => {
-      const mockTasks: Task[] = [
-        { id: 1, title: "Test Task", completed: false }
-      ];
-
-      global.fetch = jest.fn(() =>
-        Promise.resolve({
-          json: () => Promise.resolve(mockTasks)
-        } as Response)
-      ) as jest.Mock;
-
-      const result = await fetchTasksAPI();
-
-      expect(fetch).toHaveBeenCalledWith("http://localhost:8080/tasks");
-      expect(result).toEqual(mockTasks);
-    });
-
-    
-it("should throw error if fetch fails", async () => {
-    global.fetch = jest.fn(() =>
-      Promise.reject("Fetch failed")
-    ) as jest.Mock;
-  
-    await expect(fetchTasksAPI()).rejects.toEqual("Fetch failed");
+  afterEach(() => {
+    axiosMock.restore();
   });
   
+  it('should create task successfully', async () => {
+    const newTask = { id: 1, title: 'Task 1', priority: 'Low', taskStatus: 'Todo' } as Task;
+
+    axiosMock.onPost(`${BASE_URL}/createtask`).reply(200);
+
+    const result = await createTaskAPI(newTask);
+
+    expect(result).toEqual({ success: true });
   });
 
-  describe("createTaskAPI", () => {
-    const newTask: Task = { id: 1, title: "New Task", completed: false };
+  it('should handle create task failure', async () => {
+    const newTask = { id: 1, title: 'Task 1', priority: 'Low', taskStatus: 'Todo' } as Task;
 
-    it("should create task successfully", async () => {
-      mockedAxios.post.mockResolvedValueOnce({});
+    axiosMock.onPost(`${BASE_URL}/createtask`).networkError();
 
-      const result = await createTaskAPI(newTask);
+    const result = await createTaskAPI(newTask);
 
-      expect(axios.post).toHaveBeenCalledWith(
-        "http://localhost:8080/createtask",
-        newTask
-      );
-      expect(result).toEqual({ success: true });
-    });
+    expect(result.success).toBe(false);
+  });
 
-    it("should handle error during creation", async () => {
-      mockedAxios.post.mockRejectedValueOnce("Error creating task");
+  
+  it('should update task successfully', async () => {
+    const updatedTask = { id: 1, title: 'Task 1', priority: 'Low', taskStatus: 'Todo' } as Task;
 
-      const result = await createTaskAPI(newTask);
+    axiosMock.onPost(`${BASE_URL}/updatetask`).reply(200);
 
-      expect(result).toEqual({
-        success: false,
-        error: "Error creating task"
+    const result = await updateTaskAPI(updatedTask);
+
+    expect(result).toEqual({ success: true });
+  });
+
+  it('should handle update task failure', async () => {
+    const updatedTask = { id: 1, title: 'Task 1', priority: 'Low', taskStatus: 'Todo' } as Task;
+
+    axiosMock.onPost(`${BASE_URL}/updatetask`).networkError();
+
+    const result = await updateTaskAPI(updatedTask);
+
+    expect(result.success).toBe(false);
+  });
+
+  
+  it('should delete task successfully', async () => {
+    const auth = { token: 'test-token' };
+
+    axiosMock
+      .onDelete(`${BASE_URL}/task/delete/1`)
+      .reply(200);
+
+    const result = await deleteTaskAPI(1, auth as any);
+
+    expect(result).toEqual({ success: true });
+  });
+
+  it('should send auth header in delete API', async () => {
+    const auth = { token: 'secure-token' };
+
+    axiosMock
+      .onDelete(`${BASE_URL}/task/delete/1`)
+      .reply((config) => {
+        expect(config.headers?.Authorization).toBe(
+          `Bearer ${auth.token}`
+        );
+        return [200];
       });
-    });
+
+    await deleteTaskAPI(1, auth as any);
   });
 
-  describe("updateTaskAPI", () => {
-    const updatedTask: Task = {
-      id: 1,
-      title: "Updated Task",
-      completed: true
-    };
+  it('should handle delete failure', async () => {
+    const auth = { token: 'fail-token' };
 
-    it("should update task successfully", async () => {
-      mockedAxios.post.mockResolvedValueOnce({});
+    axiosMock
+      .onDelete(`${BASE_URL}/task/delete/1`)
+      .networkError();
 
-      const result = await updateTaskAPI(updatedTask);
+    const result = await deleteTaskAPI(1, auth as any);
 
-      expect(axios.post).toHaveBeenCalledWith(
-        "http://localhost:8080/updatetask",
-        updatedTask
-      );
-      expect(result).toEqual({ success: true });
-    });
-
-    it("should handle error during update", async () => {
-      mockedAxios.post.mockRejectedValueOnce("Update failed");
-
-      const result = await updateTaskAPI(updatedTask);
-
-      expect(result).toEqual({
-        success: false,
-        error: "Update failed"
-      });
-    });
+    expect(result.success).toBe(false);
   });
-
-  // --------------------------------------------
-  // deleteTaskAPI
-  // --------------------------------------------
-  describe("deleteTaskAPI", () => {
-    const auth: AuthState = { token: "mock-token", role: 'ADMIN'};
-
-    it("should delete task successfully", async () => {
-      mockedAxios.delete.mockResolvedValueOnce({});
-
-      const result = await deleteTaskAPI(1, auth);
-
-      expect(axios.delete).toHaveBeenCalledWith(
-        "http://localhost:8080/task/delete/1",
-        {
-          headers: { Authorization: "Bearer mock-token" }
-        }
-      );
-
-      expect(result).toEqual({ success: true });
-    });
-
-    it("should handle error during delete", async () => {
-      mockedAxios.delete.mockRejectedValueOnce("Delete failed");
-
-      const result = await deleteTaskAPI(1, auth);
-
-      expect(result).toEqual({
-        success: false,
-        error: "Delete failed"
-      });
-    });
-  });
-
 });

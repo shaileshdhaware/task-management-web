@@ -153,18 +153,18 @@ function Dashboard() {
                             onConfirm={() => confirmDelete(deleteTaskId)}
                             onCancel={() => setConfirmDialogShow(false)}
                         />
-                        <ErrorModal
-                            show={modalError.show}
-                            errorMessage={modalError.message}
-                            onClose={() => {
-                                setModalError({ show: false, message: '' });
-                                resetStoreError();
-                            }}
-                        />
                     </div>
                 ) : (
                     <div>You don’t have any tasks listed.</div>
                 )}
+                <ErrorModal
+                    show={modalError.show}
+                    errorMessage={modalError.message}
+                    onClose={() => {
+                        setModalError({ show: false, message: '' });
+                        resetStoreError();
+                    }}
+                />
             </div>
         </div>
     );

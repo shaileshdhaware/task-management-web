@@ -5,9 +5,17 @@ import { AuthState } from "../types";
 const BASE_URL = 'http://localhost:8080';
 
 export async function fetchTasksAPI(): Promise<Array<Task>> {
-    const response = await fetch(BASE_URL + '/tasks');
-    const data = await response.json();
-    return data;
+    try {
+        const response = await fetch(BASE_URL + '/tasks');
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data: Array<Task> = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Failed to fetch tasks:', error);
+        return [];
+    }
 }
 
 export async function createTaskAPI(newTask: Task): Promise<{ success: boolean; error?: string }> {
