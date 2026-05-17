@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import { Task } from '../types';
 
-interface ViewTaskProps {
+export interface ViewTaskProps {
   show: boolean;
   handleClose: () => void;
   task: Task | null;

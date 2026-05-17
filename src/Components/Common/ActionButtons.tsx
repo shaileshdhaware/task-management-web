@@ -2,7 +2,7 @@ import React from 'react';
 import { Button, ButtonGroup } from 'react-bootstrap';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
-interface ActionButtonsProps {
+export interface ActionButtonsProps {
     id: number;
     onView: (id: number) => void;
     onEdit: (id: number) => void;
@@ -13,7 +13,6 @@ interface ActionButtonsProps {
 const ActionButtons: React.FC<ActionButtonsProps>  = ({ id, onView, onEdit, onDelete, role })  => {
     return (
         <ButtonGroup size="sm" aria-label="Action buttons">
-            {/* View Button */}
             <Button
                 variant="outline-primary"
                 onClick={() => onView(id)}
@@ -22,7 +21,6 @@ const ActionButtons: React.FC<ActionButtonsProps>  = ({ id, onView, onEdit, onDe
                 <i className="bi bi-eye"></i>
             </Button>
 
-            {/* Edit Button */}
             <Button
                 disabled={role !== 'ADMIN'} //Role Based action check
                 variant="outline-secondary"
@@ -32,7 +30,6 @@ const ActionButtons: React.FC<ActionButtonsProps>  = ({ id, onView, onEdit, onDe
                 <i className="bi bi-pencil"></i>
             </Button>
 
-            {/* Delete Button */}
             <Button
                 variant="outline-danger"
                 onClick={() => onDelete(id)}

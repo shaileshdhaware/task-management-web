@@ -18,7 +18,7 @@ jest.mock('../Store', () => ({
 }));
 
 
-// Mock ActionButtons to expose predictable buttons for interactions
+// Mock ActionButtons
 jest.mock('../Common/ActionButtons', () => (props) => {
   const { id, onDelete, onEdit, onView } = props;
   return (
@@ -117,7 +117,7 @@ describe('Dashboard', () => {
     localStorage.clear();
   });
 
-  it('renders header and calls fetchTasks on mount; shows empty state when no tasks', () => {
+  test('renders header and calls fetchTasks on mount; shows empty state when no tasks', () => {
     render(<Dashboard />);
 
     expect(screen.getByRole('heading', { name: /welcome to task dashboard/i })).toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('Dashboard', () => {
     expect(screen.getByText(/you don’t have any tasks listed\./i)).toBeInTheDocument();
   });
 
-  it('renders table when tasks exist', () => {
+  test('renders table when tasks exist', () => {
     storeState.tasks = [
       { id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' },
       { id: 2, title: 'Write tests', priority: 'Low', taskStatus: 'Done' },
@@ -149,7 +149,7 @@ describe('Dashboard', () => {
     expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
   });
 
-  it('filters tasks when typing in the search input', async () => {
+  test('filters tasks when typing in the search input', async () => {
     const user = userEvent.setup();
 
     storeState.tasks = [
@@ -171,7 +171,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Write tests')).toBeInTheDocument();
   });
 
-  it('opens ViewTaskModal when clicking task id button', async () => {
+  test('opens ViewTaskModal when clicking task id button', async () => {
     const user = userEvent.setup();
 
     storeState.tasks = [
@@ -189,7 +189,7 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('dialog', { name: /view-task-modal/i })).not.toBeInTheDocument();
   });
 
-  /*it('navigates to /createtask with task state when clicking Edit in ActionButtons', async () => {
+  /*test('navigates to /createtask with task state when clicking Edit in ActionButtons', async () => {
     const user = userEvent.setup();
 
     const task = { id: 7, title: 'Refactor', priority: 'Medium', taskStatus: 'Open' };
@@ -202,7 +202,7 @@ describe('Dashboard', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/createtask', { state: task });
   });*/
 
-  it('shows ConfirmationModal on delete; confirming calls deleteTask with id and auth; then closes', async () => {
+  test('shows ConfirmationModal on delete; confirming calls deleteTask with id and auth; then closes', async () => {
     const user = userEvent.setup();
 
     const task = { id: 3, title: 'Cleanup', priority: 'Low', taskStatus: 'Open' };
@@ -232,7 +232,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('shows ErrorModal when store error is set; closing resets store error', async () => {
+  test('shows ErrorModal when store error is set; closing resets store error', async () => {
     const user = userEvent.setup();
 
     storeState.tasks = [{ id: 1, title: 'Fix bug', priority: 'High', taskStatus: 'Open' }];

@@ -143,7 +143,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ initialData }) => {
                                 isInvalid={!!errors.taskStatus} {...register('taskStatus')}
                                 defaultValue="Todo"
                             >
-                                <option value="Todo" selected>Todo</option>
+                                <option value="Todo">Todo</option>
                                 <option value="In Progress">In Progress</option>
                                 <option value="Done">Done</option>
                             </Form.Select>
